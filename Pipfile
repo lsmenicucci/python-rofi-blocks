@@ -4,9 +4,6 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-rich = "*"
-pprofile = "*"
-aiohttp = "*"
 rofi-blocks = {editable = true, path = "."}
 
 [dev-packages]
