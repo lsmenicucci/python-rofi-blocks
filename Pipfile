@@ -5,9 +5,9 @@ name = "pypi"
 
 [packages]
 rich = "*"
-yep = "*"
 pprofile = "*"
 aiohttp = "*"
+rofi-blocks = {editable = true, path = "."}
 
 [dev-packages]
 

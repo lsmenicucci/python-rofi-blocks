@@ -1,61 +1,29 @@
 import asyncio
 import json
-from functools import wraps
 from typing import List, Literal
-from rich import print, inspect
-from time import time
 
-
-def guard_class_property(prop_name: str):
-    def guard_decorator(fn):
-        @wraps(fn)
-        def guarded_fn(self, *args, **kwargs):
-            if (getattr(self, prop_name) is not None):
-                return fn(self, *args, **kwargs)
-
-        return guarded_fn
-
-    return guard_decorator
-
-
-def accepts_cancelation(fn):
-    @wraps(fn)
-    def guarded_fn(*args, **kwargs):
-        try:
-            return fn(*args, **kwargs)
-        except asyncio.CancelledError:
-            raise
-
-    return guarded_fn
-
-
-def measure_time(fn):
-    @wraps(fn)
-    def measured_fn(*args, **kwargs):
-        start = time()
-        res = fn(*args, **kwargs)
-        duration = time() - start 
-
-        print(f"Execution took {duration}")
-
-        return res
-
-    return measured_fn
+from .util import guard_class_property
 
 class RofiBlocks():
     def __init__(self):
         self.rofi_base_cmd = ["rofi"]
         self.proc_queue = asyncio.Queue()
 
-    async def launch(self):
+    async def __aenter__(self):
         cmd = self.rofi_base_cmd + ["-modi", "blocks", "-show", "blocks"]
         self.proc = await asyncio.create_subprocess_exec(*cmd,
-                                                   stdin=asyncio.subprocess.PIPE,
-                                                   stdout=asyncio.subprocess.PIPE)
+                                                         stdin=asyncio.subprocess.PIPE,
+                                                         stdout=asyncio.subprocess.PIPE)
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        if (self.proc and self.proc.returncode is None):
+            self.proc.kill()
+        self.proc = None
 
     @guard_class_property("proc")
     async def _watch_stdout(self):
-        while self.proc.returncode is None:
+        while self.proc and self.proc.returncode is None:
             await asyncio.sleep(0) # THIS IS CRITICAL
             line = await self.proc.stdout.readline()
             line = line.decode().replace("\n", "")
@@ -70,7 +38,7 @@ class RofiBlocks():
     def _write_blocks_content(proc: asyncio.subprocess.Process, content: dict):
         dump = (json.dumps(content) + "\n").encode()
 
-        if proc.returncode is None:
+        if proc and proc.returncode is None:
             proc.stdin.write(dump)
 
     async def interact(self):
@@ -93,19 +61,17 @@ class RofiBlocks():
 
                 read_task.cancel()
 
-                self.proc = None
-
                 return
 
     @guard_class_property("proc")
-    def update(self, *, msg: str = None, overlay: str = None,
-                    prompt: str = None, input: str = None,
-                    input_action: Literal["filter", "send"] = None, 
-                    active_entry: int = None,
-                    lines: List[str] = None):
+    def update(self, *, message: str = None, overlay: str = None,
+               prompt: str = None, input: str = None,
+               input_action: Literal["filter", "send"] = None, 
+               active_entry: int = None,
+               lines: List[str] = None):
 
         update_dict = {
-            "message": msg,
+            "message": message,
             "overlay": overlay,
             "prompt": prompt,
             "input": input,
